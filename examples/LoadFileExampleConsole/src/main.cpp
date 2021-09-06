@@ -9,8 +9,11 @@
 #include <ifcpp/IFC4/include/IfcObjectDefinition.h>
 #include <ifcpp/IFC4/include/IfcProject.h>
 #include <ifcpp/IFC4/include/IfcRelAggregates.h>
+#include <ifcpp/IFC4/include/IfcRelAssociates.h>
+#include <ifcpp/IFC4/include/IfcRelAssociatesMaterial.h>
 #include <ifcpp/IFC4/include/IfcRelContainedInSpatialStructure.h>
 #include <ifcpp/IFC4/include/IfcText.h>
+#include <ifcpp/IFC4/include/IfcElement.h>
 #include <ifcpp/model/BuildingModel.h>
 #include <ifcpp/reader/ReaderSTEP.h>
 
@@ -29,10 +32,19 @@ shared_ptr<MyIfcTreeItem> resolveTreeItems(bool& contains_surface, shared_ptr<Bu
 {
 	bool this_is_surface = false;
 	bool child_contains_surface = false;
-	shared_ptr<IfcSurfaceStyle> surfaceP = nullptr;
 
 	shared_ptr<MyIfcTreeItem> item;
 	shared_ptr<IfcObjectDefinition> obj_def = dynamic_pointer_cast<IfcObjectDefinition>(obj);
+	auto element = dynamic_pointer_cast<IfcElement>(obj);
+	if (element) {
+		//this_is_surface = true;
+		for (auto assWeak = element->m_HasAssociations_inverse.begin(); assWeak != element->m_HasAssociations_inverse.end(); assWeak++) {
+			auto assMaterial = dynamic_pointer_cast<IfcRelAssociatesMaterial>(assWeak->lock());
+			if (!assMaterial)
+				continue;
+			std::cout << "GOT MATERIAL ASSOCIATION!" << std::endl;
+		}
+	}
 
 	if (obj_def)
 	{
@@ -45,24 +57,14 @@ shared_ptr<MyIfcTreeItem> resolveTreeItems(bool& contains_surface, shared_ptr<Bu
 		item = std::shared_ptr<MyIfcTreeItem>(new MyIfcTreeItem());
 		item->m_ifc_class_name = obj_def->className();
 
-		this_is_surface = item->m_ifc_class_name == "IfcSurfaceStyle";
-		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-		std::cout << "Got " + converter.to_bytes(item->m_entity_guid) + " with class " << item->m_ifc_class_name << std::endl;
+
 		std::vector<std::pair<std::string, std::shared_ptr<BuildingObject>>> attr;
 		obj_def->getAttributes(attr);
-		auto surfaceI = std::find_if(attr.begin(), attr.end(), [](auto elem) {return (dynamic_pointer_cast<IfcSurfaceStyle>(elem.second) != nullptr); });
-		if (surfaceI != attr.end())
-		{
-			this_is_surface = true;
-			surfaceP = dynamic_pointer_cast<IfcSurfaceStyle>(surfaceI->second);
-		}
 		for (auto aI = attr.begin(); aI != attr.end(); aI++)
 		{
-			if (aI->second) {
-				std::cout << "   - Attribute " << aI->first << " with className " << aI->second->className() << "  (NB toString " << converter.to_bytes(aI->second->toString()) << ")" << std::endl;
-			}
-			else {
-				std::cout << "   - Attribute " << aI->first << std::endl;
+			auto surfaceAttr = dynamic_pointer_cast<IfcSurfaceStyle>(aI->second);
+			if (surfaceAttr) {
+				std::cout << "GOT AN ATTRIBUTE SURFACE!" << std::endl;
 			}
 		}
 
@@ -133,7 +135,7 @@ shared_ptr<MyIfcTreeItem> resolveTreeItems(bool& contains_surface, shared_ptr<Bu
 		contains_surface = true;
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		if (this_is_surface)
-			std::cout << "Got surface - " << converter.to_bytes(surfaceP->m_Name->m_value) << std::endl;
+			std::cout << "Got surface - " << converter.to_bytes(item->m_description) << std::endl;
 		if (child_contains_surface)
 			std::cout << " - within " << converter.to_bytes(item->m_entity_guid) << " : " << converter.to_bytes(item->m_description) << std::endl;
 	}
